@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Génération PLAQUE PCR</title>
+  <link rel="stylesheet" href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css">
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-800">
+  <header class="border-b bg-white">
+    <div class="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
+      <!-- <h1 class="text-2xl font-semibold tracking-tight">Génération PLAQUE PCR</h1> -->
+      <span class="text-sm text-gray-500">v1.0</span>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 py-10 space-y-10">
+    <!-- ============ Formulaire de génération (fichier de données) ============ -->
+    <section class="bg-white rounded-2xl shadow p-6 md:p-8">
+      <h2 class="text-xl font-medium mb-2">Générer une plaque</h2>
+      <p class="text-gray-600 mb-6">Sélectionnez un <strong>template</strong>, une <strong>position</strong> (optionnelle), puis déposez votre fichier <strong>Excel</strong>.</p>
+
+      <form id="form" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="space-y-6">
+        <!-- Sélecteur de template + position -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm mb-1 font-medium" for="template_key">Template</label>
+            <select id="template_key" name="template_key" required
+                    class="w-full border rounded-lg px-3 py-2 bg-white">
+              {% if templates and templates|length > 0 %}
+                {% for key, info in templates.items() %}
+                  <option value="{{ key }}">
+                    {{ key }} (pos: {{ info.position }})
+                  </option>
+                {% endfor %}
+              {% else %}
+                <option value="" disabled selected>— Aucun template disponible —</option>
+              {% endif %}
+            </select>
+            <p class="text-xs text-gray-500 mt-1">
+              La position laissée vide utilisera celle mémorisée pour le template.
+            </p>
+          </div>
+
+          <div>
+            <label class="block text-sm mb-1 font-medium" for="position">Position (optionnel)</label>
+            <input id="position" name="position" type="text" placeholder="ex. H5"
+                   pattern="^[A-Za-z]{1,3}[1-9][0-9]{0,6}$"
+                   class="w-full border rounded-lg px-3 py-2"
+                   title="Format Excel : A1, AA10, …" />
+          </div>
+        </div>
+
+        <!-- Zone Drag & Drop -->
+        <div id="drop-area"
+             class="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 transition-colors p-8 cursor-pointer"
+             role="button" tabindex="0" aria-label="Déposer un fichier ici ou cliquer pour sélectionner">
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8" />
+          </svg>
+          <p class="text-sm text-gray-600 text-center">
+            <span class="font-medium text-indigo-600">Glissez-déposez</span> votre fichier ici<br/>
+            ou <span class="font-medium text-indigo-600">cliquez</span> pour parcourir.
+          </p>
+          <input id="file" name="excel_file" type="file" accept=".xls,.xlsx"
+                 class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+        </div>
+
+        <!-- Aperçu -->
+        <div id="file-info" class="hidden rounded-lg bg-gray-50 border border-gray-200 p-4">
+          <dl class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div><dt class="text-gray-500">Nom</dt><dd id="fi-name" class="font-medium break-words">—</dd></div>
+            <div><dt class="text-gray-500">Taille</dt><dd id="fi-size" class="font-medium">—</dd></div>
+            <div><dt class="text-gray-500">Type</dt><dd id="fi-type" class="font-medium">—</dd></div>
+          </dl>
+        </div>
+
+        <!-- Alerte -->
+        <div id="alert" class="hidden rounded-lg border border-red-200 bg-red-50 text-red-700 p-3 text-sm"></div>
+
+        <div class="flex items-center gap-3">
+          <button type="submit"
+                  class="inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-medium">
+            Générer la plaque PCR
+          </button>
+          <button id="reset-btn" type="button" class="text-sm text-gray-600 hover:text-gray-800 underline">
+            Réinitialiser
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============ Formulaire d’ajout de template ============ -->
+    <section class="bg-white rounded-2xl shadow p-6 md:p-8">
+      <h2 class="text-xl font-medium mb-2">Ajouter un template</h2>
+      <p class="text-gray-600 mb-6">Enregistrez un template Excel et sa position par défaut.</p>
+
+      <form action="{{ url_for('upload_template') }}" method="post" enctype="multipart/form-data" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm mb-1 font-medium" for="name">Nom du template</label>
+            <input id="name" name="name" type="text" required
+                   placeholder="ex. iris_pcr_v1"
+                   class="w-full border rounded-lg px-3 py-2" />
+            <p class="text-xs text-gray-500 mt-1">Utilisé comme clé interne (un slug sera généré).</p>
+          </div>
+
+          <div>
+            <label class="block text-sm mb-1 font-medium" for="tpl-position">Position par défaut</label>
+            <input id="tpl-position" name="position" type="text" required placeholder="ex. H5"
+                   pattern="^[A-Za-z]{1,3}[1-9][0-9]{0,6}$"
+                   class="w-full border rounded-lg px-3 py-2"
+                   title="Format Excel : A1, AA10, …" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm mb-1 font-medium" for="template_file">Fichier Excel (.xls/.xlsx)</label>
+          <input id="template_file" name="template_file" type="file" accept=".xls,.xlsx" required
+                 class="block w-full border rounded-lg px-3 py-2 bg-white" />
+        </div>
+
+        <div>
+          <button type="submit" class="inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-medium">
+            Enregistrer le template
+          </button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="max-w-4xl mx-auto px-4 py-8 text-xs text-gray-500">
+    Fichiers acceptés : .xls, .xlsx — Taille max recommandée &lt; 20&nbsp;Mo.
+  </footer>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    (function () {
+      const $file  = $('#file');
+      const $drop  = $('#drop-area');
+      const $info  = $('#file-info');
+      const $name  = $('#fi-name');
+      const $size  = $('#fi-size');
+      const $type  = $('#fi-type');
+      const $alert = $('#alert');
+      const $reset = $('#reset-btn');
+
+      // Empêcher l'ouverture du fichier par le navigateur
+      $(document).on('dragover dragenter drop', function (e) { e.preventDefault(); });
+
+      // Effets visuels
+      $drop.on('dragover dragenter', function () {
+        $drop.addClass('border-indigo-500 bg-indigo-50');
+      });
+      $drop.on('dragleave dragend mouseleave', function () {
+        $drop.removeClass('border-indigo-500 bg-indigo-50');
+      });
+
+      // Drag & drop → renseigne réellement l'input file
+      $drop.on('drop', function (e) {
+        const files = e.originalEvent.dataTransfer.files;
+        if (files && files.length) {
+          const f = files[0];
+          if (!/\.(xls|xlsx)$/i.test(f.name)) {
+            showError("Format non supporté. Extensions acceptées : .xls, .xlsx");
+            $file.val('');
+            $info.addClass('hidden');
+          } else {
+            const dt = new DataTransfer();
+            dt.items.add(f);
+            $file[0].files = dt.files;
+            setFile(f);
+          }
+        }
+        $drop.removeClass('border-indigo-500 bg-indigo-50');
+      });
+
+      // Sélection via clic
+      $file.on('change', function (e) {
+        const f = e.target.files && e.target.files[0];
+        if (f) {
+          if (!/\.(xls|xlsx)$/i.test(f.name)) {
+            showError("Format non supporté. Extensions acceptées : .xls, .xlsx");
+            $file.val('');
+            $info.addClass('hidden');
+          } else {
+            setFile(f);
+          }
+        }
+      });
+
+      // Réinitialisation
+      $reset.on('click', function () {
+        $file.val('');
+        $info.addClass('hidden');
+        $alert.addClass('hidden').text('');
+      });
+
+      // Helpers
+      function setFile(f) {
+        $name.text(f.name);
+        $size.text(formatSize(f.size));
+        $type.text(f.type || 'Inconnu');
+        $info.removeClass('hidden');
+        $alert.addClass('hidden').text('');
+      }
+
+      function showError(msg) {
+        $alert.text(msg).removeClass('hidden');
+      }
+
+      function formatSize(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+        const k = 1024, units = ['octets', 'Ko', 'Mo', 'Go', 'To'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const v = (bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1);
+        return `${v} ${units[i]}`;
+      }
+    })();
+  </script>
+</body>
+</html>

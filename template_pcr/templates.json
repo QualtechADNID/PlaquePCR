@@ -1,0 +1,10 @@
+{
+  "template_standard": {
+    "filename": "template_standard.xlsx",
+    "position": "H5"
+  },
+  "template_cafe": {
+    "filename": "template_cafe.xlsx",
+    "position": "J3"
+  }
+}
