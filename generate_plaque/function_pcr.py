@@ -99,6 +99,19 @@ def generate_plaque_in_template(dataframe: pd.DataFrame, template_file: str, pos
     Remplit le template Excel et retourne un buffer BytesIO prêt à être envoyé,
     sans sauvegarde sur disque.
     """
+    def make_content(x):
+        code = str(x["Code labo"])
+        amorce = str(x["Amorces"])
+        instance = str(x["Instance"])
+        dilution = str(x["Dilution"]).strip()
+        parts = [code]
+        if instance != "1" and instance != "":
+            parts.append(instance)
+        parts.append(amorce)
+        if dilution:
+            parts.append(dilution)
+        return "_".join(parts)
+    
     row, col = excel_coord_to_index(position)
     df = dataframe.copy()
     df["Instance_num"] = pd.to_numeric(df["Instance"], errors="coerce")
@@ -116,12 +129,16 @@ def generate_plaque_in_template(dataframe: pd.DataFrame, template_file: str, pos
               .apply(assign_plates_columns, plate_size=96)
               .reset_index(drop=True))
 
-    plates["Content"] = (
-        plates["Code labo"].astype(str) + "_" +
-        plates["Instance"].astype(str)  + "_" +
-        plates["Amorces"].astype(str)  + "_" +
-        plates["Dilution"].astype(str)
-    )
+    # plates["Content"] = (
+    #     plates["Code labo"].astype(str).fillna("") + "_" +
+    #     plates["Instance"].astype(str).fillna("") + "_" +
+    #     plates["Amorces"].astype(str).fillna("") + "_" +
+    #     plates["Dilution"].astype(str).fillna("")
+    # ).str.strip("_")
+
+    plates["Dilution"] = plates["Dilution"].fillna("").astype(str).replace("nan", "")
+    plates["Instance"] = plates["Instance"].fillna("").astype(str).replace("nan", "")
+    plates["Content"] = plates.apply(make_content, axis=1)
 
     wb = load_workbook(template_file)
     ws = wb["Feuil1"]
