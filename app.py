@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, render_template, request, flash, redirect, url_for, send_file
 from werkzeug.utils import secure_filename
 from pathlib import Path
-from .generate_plaque.function_pcr import read_excel_file, generate_plaque_in_template
+from generate_plaque.function_pcr import read_excel_file, generate_plaque_in_template
 import os, re, json, unicodedata
 from werkzeug.middleware.proxy_fix import ProxyFix
 
