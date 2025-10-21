@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, render_template, request, flash, redirect, url_for, send_file
 from werkzeug.utils import secure_filename
 from pathlib import Path
-from generate_plaque.function_pcr import read_excel_file, generate_plaque_in_template
+from .generate_plaque.function_pcr import read_excel_file, generate_plaque_in_template
 import os, re, json, unicodedata
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -104,6 +104,7 @@ def upload_template():
 def upload():
     # Fichier de données à traiter
     f = request.files.get("excel_file")              # <input name="excel_file">
+    choice = request.form.get("group_primers") == "on"
     if f is None or f.filename == "":
         flash("Aucun fichier fourni.")
         return redirect(url_for("index"))
@@ -139,7 +140,7 @@ def upload():
         return redirect(url_for("index"))
 
     try:
-        xlsx_buf = generate_plaque_in_template(df, str(template_path), position=position)
+        xlsx_buf = generate_plaque_in_template(df, str(template_path), position=position, choice=choice)
     except Exception as e:
         flash(f"Erreur de génération du template : {e}")
         return redirect(url_for("index"))

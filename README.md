@@ -57,3 +57,7 @@ Contraintes : pas de bouton directement dans LV (passage par une page externe). 
 
 - « Modèle » = *template* (équivalent français).
 - La gestion et la mise à jour des modèles sont sous la **responsabilité des utilisateurs**.
+
+## Mise à jour
+
+- 21/10/2025 : Ajout de la prise en compte des enzymes pour les plaques PCR + des dilutions

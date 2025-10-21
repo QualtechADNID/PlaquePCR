@@ -16,13 +16,22 @@ def excel_coord_to_index(cell_ref: str) -> tuple[int, int]:
 def split_clean(s):
     return [t.strip() for t in str(s).split(";") if t.strip() != ""]
 
+def sort_within_program_dil(group: pd.DataFrame) -> pd.DataFrame:
+    counts = group["Amorces"].value_counts()
+    group = group.copy()
+    group["Amorce_count"] = group["Amorces"].map(counts)
+    return (group.sort_values(
+        ["Amorce_count", "Amorces","Dilution" ,"Code labo", "Instance_num"],
+        ascending=[False, True, True , True, True]
+    ).drop(columns="Amorce_count"))
+
 def sort_within_program(group: pd.DataFrame) -> pd.DataFrame:
     counts = group["Amorces"].value_counts()
     group = group.copy()
     group["Amorce_count"] = group["Amorces"].map(counts)
     return (group.sort_values(
-        ["Amorce_count", "Amorces", "Code labo", "Instance_num"],
-        ascending=[False, True, True, True]
+        ["Amorce_count", "Amorces","Code labo", "Instance_num","Dilution"],
+        ascending=[False, True, True , True, True]
     ).drop(columns="Amorce_count"))
 
 def assign_plates_columns(group: pd.DataFrame, plate_size: int = 96) -> pd.DataFrame:
@@ -55,24 +64,37 @@ def read_excel_file(file_like) -> pd.DataFrame:
         "Code labo",
         "Instance #",
         "PRE-PCR-MON (0,1)_Amorces (Standard, Rep [replicateid])",
-        "PRE-PCR-MON (0,1)_Programme PCR (Standard, Rep [replicateid])"
+        "PRE-PCR-MON (0,1)_Programme PCR (Standard, Rep [replicateid])",
+        "PRE-PCR-MON (0,1)_Enzyme utilise (Standard, Rep [replicateid])",
+        "PRE-PCR-MON (0,1)_Facteur de dilution (Standard, Rep [replicateid])"
     ]].rename(columns={
         "PRE-PCR-MON (0,1)_Amorces (Standard, Rep [replicateid])": "Amorces",
         "PRE-PCR-MON (0,1)_Programme PCR (Standard, Rep [replicateid])": "ProgrammePCR",
+        "PRE-PCR-MON (0,1)_Enzyme utilise (Standard, Rep [replicateid])" : "Enzyme",
+        "PRE-PCR-MON (0,1)_Facteur de dilution (Standard, Rep [replicateid])" : "Dilution",
         "Instance #": "Instance"
     })
     df2["Amorces_liste"] = df2["Amorces"].apply(split_clean)
     df2["Programme_liste"] = df2["ProgrammePCR"].apply(split_clean)
+    df2["Dilution_liste"] = df2["Dilution"].apply(split_clean)
     df2["pairs"] = df2.apply(
         lambda r: list(zip_longest(r["Amorces_liste"], r["Programme_liste"], fillvalue=pd.NA)),
         axis=1
     )
     macron = df2.explode("pairs", ignore_index=True)
     macron[["Amorces", "ProgrammePCR"]] = macron["pairs"].apply(pd.Series)
-    result = macron[["Code labo", "Instance", "Amorces", "ProgrammePCR"]].copy()
+    macron = macron.explode("Dilution_liste", ignore_index=True)
+    macron["Dilution"] = macron["Dilution_liste"].apply(pd.Series)
+    macron["ProgrammePCR"] = macron.apply(
+        lambda x: f"{x['ProgrammePCR']}_{x['Enzyme']}"
+        if pd.notna(x["Enzyme"]) and x["Enzyme"] != ""
+        else str(x["ProgrammePCR"]),
+        axis=1
+    )
+    result = macron[["Code labo", "Instance", "Amorces", "ProgrammePCR","Enzyme","Dilution"]].copy()
     return result
 
-def generate_plaque_in_template(dataframe: pd.DataFrame, template_file: str, position: str) -> BytesIO:
+def generate_plaque_in_template(dataframe: pd.DataFrame, template_file: str, position: str, choice: bool) -> BytesIO:
     """
     Remplit le template Excel et retourne un buffer BytesIO prêt à être envoyé,
     sans sauvegarde sur disque.
@@ -81,9 +103,14 @@ def generate_plaque_in_template(dataframe: pd.DataFrame, template_file: str, pos
     df = dataframe.copy()
     df["Instance_num"] = pd.to_numeric(df["Instance"], errors="coerce")
 
-    df_sorted = (df.groupby("ProgrammePCR", group_keys=False)
-                   .apply(sort_within_program)
-                   .reset_index(drop=True))
+    if choice : 
+        df_sorted = (df.groupby("ProgrammePCR", group_keys=False)
+                    .apply(sort_within_program_dil)
+                    .reset_index(drop=True))
+    else :
+        df_sorted = (df.groupby("ProgrammePCR", group_keys=False)
+                    .apply(sort_within_program)
+                    .reset_index(drop=True))
 
     plates = (df_sorted.groupby("ProgrammePCR", group_keys=False)
               .apply(assign_plates_columns, plate_size=96)
@@ -92,7 +119,8 @@ def generate_plaque_in_template(dataframe: pd.DataFrame, template_file: str, pos
     plates["Content"] = (
         plates["Code labo"].astype(str) + "_" +
         plates["Instance"].astype(str)  + "_" +
-        plates["Amorces"].astype(str)
+        plates["Amorces"].astype(str)  + "_" +
+        plates["Dilution"].astype(str)
     )
 
     wb = load_workbook(template_file)
