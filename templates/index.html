@@ -15,12 +15,28 @@
   </header>
 
   <main class="max-w-4xl mx-auto px-4 py-10 space-y-10">
+
+    <!-- Flash messages Flask -->
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for msg in messages %}
+            <div class="rounded-lg border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+              <span>{{ msg }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
     <!-- ============ Formulaire de génération (fichier de données) ============ -->
     <section class="bg-white rounded-2xl shadow p-6 md:p-8">
       <h2 class="text-xl font-medium mb-2">Générer une plaque</h2>
       <p class="text-gray-600 mb-6">Sélectionnez un <strong>template</strong>, une <strong>position</strong> (optionnelle), puis déposez votre fichier <strong>Excel</strong>.</p>
 
-      <form id="form" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="space-y-6">
+      <form id="form" action="{{ url_for('arrange') }}" method="post" enctype="multipart/form-data" class="space-y-6">
         <!-- Sélecteur de template + position -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -50,16 +66,40 @@
                    title="Format Excel : A1, AA10, …" />
           </div>
 
-          <div class="flex items-center space-x-2 md:col-span-2">
-            <input id="group_primers" name="group_primers" type="checkbox"
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-            <label for="group_primers" class="text-sm font-medium text-gray-700">
-              Grouper les dilutions
-            </label>
+          <!-- Options de tri -->
+          <div class="md:col-span-2 rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Options de tri automatique</p>
+
+            <div class="flex items-start gap-3">
+              <input id="sort_similarity" name="sort_similarity" type="checkbox" checked
+                     class="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+              <div>
+                <label for="sort_similarity" class="text-sm font-medium text-gray-700">
+                  Grouper par similitude d'amorces
+                </label>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  Les échantillons partageant le plus d'amorces sont placés ensemble en tête de plaque.
+                  Ceux avec des amorces différentes sont mis à la fin.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-3">
+              <input id="group_primers" name="group_primers" type="checkbox"
+                     class="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+              <div>
+                <label for="group_primers" class="text-sm font-medium text-gray-700">
+                  Grouper les dilutions
+                </label>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  Trier par dilution en priorité dans chaque groupe d'amorces.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Zone Drag & Drop -->
+        <!-- Zone Drag & Drop fichier de données -->
         <div id="drop-area"
              class="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 transition-colors p-8 cursor-pointer"
              role="button" tabindex="0" aria-label="Déposer un fichier ici ou cliquer pour sélectionner">
@@ -75,7 +115,7 @@
                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
         </div>
 
-        <!-- Aperçu -->
+        <!-- Aperçu fichier de données -->
         <div id="file-info" class="hidden rounded-lg bg-gray-50 border border-gray-200 p-4">
           <dl class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div><dt class="text-gray-500">Nom</dt><dd id="fi-name" class="font-medium break-words">—</dd></div>
@@ -84,13 +124,30 @@
           </dl>
         </div>
 
+        <!-- Fichier clients LV (optionnel) -->
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Liste des demandes clients (optionnel)</p>
+          <p class="text-xs text-gray-500">
+            Fichier <strong>LV*.xls</strong> exporté depuis le LIMS — permet de grouper les demandes par client dans la vue arrangement.
+          </p>
+          <div class="flex items-center gap-3">
+            <input id="lv-file" name="lv_file" type="file" accept=".xls,.xlsx"
+                   class="block text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+            <span id="lv-file-name" class="text-xs text-gray-400 italic hidden"></span>
+            <button id="lv-clear" type="button" class="hidden text-xs text-gray-400 hover:text-red-500 underline">Retirer</button>
+          </div>
+        </div>
+
         <!-- Alerte -->
         <div id="alert" class="hidden rounded-lg border border-red-200 bg-red-50 text-red-700 p-3 text-sm"></div>
 
         <div class="flex items-center gap-3">
           <button type="submit"
-                  class="inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-medium">
-            Générer la plaque PCR
+                  class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 font-medium shadow transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            </svg>
+            Visualiser et arranger les plaques
           </button>
           <button id="reset-btn" type="button" class="text-sm text-gray-600 hover:text-gray-800 underline">
             Réinitialiser
@@ -139,93 +196,11 @@
   </main>
 
   <footer class="max-w-4xl mx-auto px-4 py-8 text-xs text-gray-500">
-    Fichiers acceptés : .xls, .xlsx — Taille max recommandée &lt; 20&nbsp;Mo.
+    Fichiers acceptés : .xls, .xlsx — Taille max recommandée &lt; 20&nbsp;Mo. —
+    Après visualisation des plaques, vous pourrez réorganiser les échantillons par drag &amp; drop avant l'export Excel.
   </footer>
 
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script>
-    (function () {
-      const $file  = $('#file');
-      const $drop  = $('#drop-area');
-      const $info  = $('#file-info');
-      const $name  = $('#fi-name');
-      const $size  = $('#fi-size');
-      const $type  = $('#fi-type');
-      const $alert = $('#alert');
-      const $reset = $('#reset-btn');
-
-      // Empêcher l'ouverture du fichier par le navigateur
-      $(document).on('dragover dragenter drop', function (e) { e.preventDefault(); });
-
-      // Effets visuels
-      $drop.on('dragover dragenter', function () {
-        $drop.addClass('border-indigo-500 bg-indigo-50');
-      });
-      $drop.on('dragleave dragend mouseleave', function () {
-        $drop.removeClass('border-indigo-500 bg-indigo-50');
-      });
-
-      // Drag & drop → renseigne réellement l'input file
-      $drop.on('drop', function (e) {
-        const files = e.originalEvent.dataTransfer.files;
-        if (files && files.length) {
-          const f = files[0];
-          if (!/\.(xls|xlsx)$/i.test(f.name)) {
-            showError("Format non supporté. Extensions acceptées : .xls, .xlsx");
-            $file.val('');
-            $info.addClass('hidden');
-          } else {
-            const dt = new DataTransfer();
-            dt.items.add(f);
-            $file[0].files = dt.files;
-            setFile(f);
-          }
-        }
-        $drop.removeClass('border-indigo-500 bg-indigo-50');
-      });
-
-      // Sélection via clic
-      $file.on('change', function (e) {
-        const f = e.target.files && e.target.files[0];
-        if (f) {
-          if (!/\.(xls|xlsx)$/i.test(f.name)) {
-            showError("Format non supporté. Extensions acceptées : .xls, .xlsx");
-            $file.val('');
-            $info.addClass('hidden');
-          } else {
-            setFile(f);
-          }
-        }
-      });
-
-      // Réinitialisation
-      $reset.on('click', function () {
-        $file.val('');
-        $info.addClass('hidden');
-        $alert.addClass('hidden').text('');
-      });
-
-      // Helpers
-      function setFile(f) {
-        $name.text(f.name);
-        $size.text(formatSize(f.size));
-        $type.text(f.type || 'Inconnu');
-        $info.removeClass('hidden');
-        $alert.addClass('hidden').text('');
-      }
-
-      function showError(msg) {
-        $alert.text(msg).removeClass('hidden');
-      }
-
-      function formatSize(bytes) {
-        if (!Number.isFinite(bytes) || bytes <= 0) return '—';
-        const k = 1024, units = ['octets', 'Ko', 'Mo', 'Go', 'To'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        const v = (bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1);
-        return `${v} ${units[i]}`;
-      }
-    })();
-  </script>
+  <script src="{{ url_for('static', filename='js/index.js') }}"></script>
 </body>
 </html>
