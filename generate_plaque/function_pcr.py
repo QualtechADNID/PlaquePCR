@@ -1,7 +1,6 @@
 # generate_plaque/function_pcr.py
 import pandas as pd
 from itertools import zip_longest
-import numpy as np
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, Border, Side
 from openpyxl.utils import get_column_letter
@@ -76,20 +75,70 @@ def sort_within_program(group: pd.DataFrame) -> pd.DataFrame:
     ).drop(columns="Amorce_count"))
 
 def assign_plates_columns(group: pd.DataFrame, plate_size: int = 96) -> pd.DataFrame:
-    n = len(group)
-    idx = np.arange(n)
-    plate = idx // plate_size + 1
-    pos = idx % plate_size
-    col_num = pos // 8 + 1
-    row_num = pos % 8
-    rows = np.array(list("ABCDEFGH"))
-    row_lbl = rows[row_num]
-    well = [r + str(c).zfill(2) for r, c in zip(row_lbl, col_num)]
+    """
+    Place les échantillons dans les puits d'une plaque 96 (8 lignes × 12 colonnes).
+    Règle : chaque nouvelle amorce (valeur distincte de la colonne "Amorces") commence
+    obligatoirement à la rangée A de la prochaine colonne disponible.
+    Les cases restantes de la colonne précédente sont laissées vides (pas de Well assigné).
+    """
+    ROWS_PER_COL = 8   # A→H
+    COLS_PER_PLATE = plate_size // ROWS_PER_COL  # 12 pour une plaque 96
+
+    rows_labels = list("ABCDEFGH")
+
+    plate_list   = []
+    row_list     = []
+    col_list     = []
+    well_list    = []
+
+    current_plate = 1
+    current_col   = 1   # 1-indexed dans la plaque courante
+    current_row   = 0   # 0-indexed (0=A … 7=H)
+    prev_amorce   = None
+
+    def _next_col():
+        """Avance d'une colonne, change de plaque si nécessaire."""
+        nonlocal current_plate, current_col
+        current_col += 1
+        if current_col > COLS_PER_PLATE:
+            current_plate += 1
+            current_col = 1
+
+    for _, sample in group.iterrows():
+        amorce = sample["Amorces"]
+
+        # Changement d'amorce → forcer le début d'une nouvelle colonne
+        if amorce != prev_amorce and prev_amorce is not None:
+            # Si la colonne précédente était exactement pleine (A→H),
+            # l'amorce suivante doit sauter une colonne supplémentaire (colonne vide).
+            prev_col_was_full = (current_row >= ROWS_PER_COL)
+            _next_col()
+            current_row = 0
+            if prev_col_was_full:
+                _next_col()
+
+        prev_amorce = amorce
+
+        # Débordement de colonne en cours de remplissage (>8 échantillons pour cette amorce)
+        if current_row >= ROWS_PER_COL:
+            current_col += 1
+            current_row = 0
+            if current_col > COLS_PER_PLATE:
+                current_plate += 1
+                current_col = 1
+
+        plate_list.append(current_plate)
+        row_list.append(rows_labels[current_row])
+        col_list.append(current_col)
+        well_list.append(rows_labels[current_row] + str(current_col).zfill(2))
+
+        current_row += 1
+
     out = group.copy()
-    out["PlateNbr"] = plate
-    out["Row"] = row_lbl
-    out["Col"] = col_num
-    out["Well"] = well
+    out["PlateNbr"] = plate_list
+    out["Row"]      = row_list
+    out["Col"]      = col_list
+    out["Well"]     = well_list
     return out
 
 def read_excel_file(file_like) -> pd.DataFrame:
