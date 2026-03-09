@@ -1,0 +1,310 @@
+/* ---- Grille plaque ---- */
+.plate-grid {
+  display: grid;
+  grid-template-columns: 2rem repeat(12, minmax(0, 1fr));
+  gap: 3px;
+}
+.well {
+  min-height: 52px;
+  border-radius: 6px;
+  border: 1.5px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  text-align: center;
+  padding: 2px 3px;
+  word-break: break-all;
+  cursor: grab;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  position: relative;
+  user-select: none;
+  background: #f9fafb;
+}
+.well.occupied {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e3a5f;
+  cursor: grab;
+}
+.well.occupied:hover {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  transform: scale(1.03);
+  z-index: 10;
+}
+.well.drag-over {
+  background: #fef9c3 !important;
+  border-color: #f59e0b !important;
+  transform: scale(1.06);
+}
+.well.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+/* ---- Sélection multiple ---- */
+.well.selected {
+  outline: 2.5px solid #6366f1;
+  outline-offset: -2px;
+  z-index: 5;
+}
+.well.selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  pointer-events: none;
+}
+#selection-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1b4b;
+  color: white;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  z-index: 100;
+  transition: opacity 0.15s;
+}
+#selection-bar.hidden { display: none; }
+.well-header {
+  background: #f3f4f6;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #6b7280;
+  min-height: 52px;
+}
+.well-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  z-index: 50;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.well:hover .well-tooltip {
+  display: block;
+}
+
+/* ---- Panneau latéral ---- */
+#sidebar {
+  width: 280px;
+  min-width: 220px;
+  flex-shrink: 0;
+}
+.unplaced-item {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.7rem;
+  cursor: grab;
+  color: #14532d;
+  margin-bottom: 4px;
+}
+.unplaced-item:hover {
+  background: #dcfce7;
+  border-color: #4ade80;
+}
+
+/* ---- Onglets ---- */
+.tab-btn.active {
+  background: #4f46e5;
+  color: white;
+  border-color: #4f46e5;
+}
+
+/* ---- Badge amorces ---- */
+.amorce-badge {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  margin: 1px;
+}
+
+/* ---- Couleurs par groupe d'amorces ---- */
+/* Spécificité (0,2,0) pour l'emporter sur .well.occupied (0,2,0) — ordre déclaration suffit */
+.well.occupied.well-color-0  { background: #eff6ff; border-color: #93c5fd; }
+.well.occupied.well-color-1  { background: #f0fdf4; border-color: #86efac; }
+.well.occupied.well-color-2  { background: #fef3c7; border-color: #fcd34d; }
+.well.occupied.well-color-3  { background: #fce7f3; border-color: #f9a8d4; }
+.well.occupied.well-color-4  { background: #f3e8ff; border-color: #d8b4fe; }
+.well.occupied.well-color-5  { background: #ecfdf5; border-color: #6ee7b7; }
+.well.occupied.well-color-6  { background: #fff7ed; border-color: #fdba74; }
+.well.occupied.well-color-7  { background: #f1f5f9; border-color: #94a3b8; }
+.well.occupied.well-color-8  { background: #fdf4ff; border-color: #e879f9; }
+.well.occupied.well-color-9  { background: #fff1f2; border-color: #fda4af; }
+/* Hover aussi coloré */
+.well.occupied.well-color-0:hover { background: #dbeafe; border-color: #3b82f6; }
+.well.occupied.well-color-1:hover { background: #dcfce7; border-color: #4ade80; }
+.well.occupied.well-color-2:hover { background: #fde68a; border-color: #f59e0b; }
+.well.occupied.well-color-3:hover { background: #fbcfe8; border-color: #ec4899; }
+.well.occupied.well-color-4:hover { background: #e9d5ff; border-color: #a855f7; }
+.well.occupied.well-color-5:hover { background: #a7f3d0; border-color: #10b981; }
+.well.occupied.well-color-6:hover { background: #fed7aa; border-color: #f97316; }
+.well.occupied.well-color-7:hover { background: #e2e8f0; border-color: #64748b; }
+.well.occupied.well-color-8:hover { background: #f5d0fe; border-color: #d946ef; }
+.well.occupied.well-color-9:hover { background: #fecdd3; border-color: #f43f5e; }
+/* Couleurs pour la légende (cercle de couleur dans le sidebar) */
+.legend-dot-0  { background: #93c5fd; }
+.legend-dot-1  { background: #86efac; }
+.legend-dot-2  { background: #fcd34d; }
+.legend-dot-3  { background: #f9a8d4; }
+.legend-dot-4  { background: #d8b4fe; }
+.legend-dot-5  { background: #6ee7b7; }
+.legend-dot-6  { background: #fdba74; }
+.legend-dot-7  { background: #94a3b8; }
+.legend-dot-8  { background: #e879f9; }
+.legend-dot-9  { background: #fda4af; }
+
+/* ---- Groupement de demandes ---- */
+.demande-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e0e7ff;
+  border: 1.5px solid #a5b4fc;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #3730a3;
+  cursor: grab;
+  user-select: none;
+  transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.demande-chip:hover {
+  background: #c7d2fe;
+  border-color: #6366f1;
+}
+.demande-chip.dragging {
+  opacity: 0.4;
+}
+.demande-chip .chip-remove {
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: #6366f1;
+  padding: 0 2px;
+}
+.demande-chip .chip-remove:hover {
+  color: #dc2626;
+}
+.group-box {
+  border: 2px dashed #c7d2fe;
+  border-radius: 10px;
+  padding: 8px;
+  background: #f5f3ff;
+  transition: border-color 0.15s, background 0.15s;
+}
+.group-box.drag-over {
+  border-color: #6366f1;
+  background: #ede9fe;
+}
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.group-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4338ca;
+  min-width: 40px;
+  outline: none;
+  border-bottom: 1px dashed #a5b4fc;
+  padding-bottom: 1px;
+}
+.group-name:focus {
+  border-bottom-color: #6366f1;
+}
+.group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 28px;
+}
+.group-empty-hint {
+  font-size: 0.62rem;
+  color: #a5b4fc;
+  font-style: italic;
+}
+#available-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 28px;
+}
+
+/* ---- Boutons gestion des plaques ---- */
+.plate-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1.5px solid #fca5a5;
+  color: #ef4444;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.plate-delete-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+.plate-delete-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: #d1d5db;
+  color: #9ca3af;
+}
+
+.plate-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 2px dashed #c7d2fe;
+  color: #6366f1;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+  margin-bottom: 8px;
+}
+.plate-add-btn:hover {
+  background: #eef2ff;
+  border-color: #6366f1;
+}

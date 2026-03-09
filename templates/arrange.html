@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Arrangement des plaques PCR</title>
+  <link rel="stylesheet" href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/arrange.css') }}">
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b shadow-sm">
+    <div class="max-w-full mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('index') }}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+          &larr; Retour
+        </a>
+        <span class="text-gray-300">|</span>
+        <h1 class="text-lg font-semibold">Arrangement des plaques PCR</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-500">Template : <strong>{{ template_key }}</strong> &mdash; Position : <strong>{{ position }}</strong></span>
+        <button id="btn-export"
+                class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-medium shadow transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Exporter Excel
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex h-[calc(100vh-65px)] overflow-hidden">
+
+    <!-- ===== PANNEAU LATERAL ===== -->
+    <aside id="sidebar" class="bg-white border-r flex flex-col overflow-y-auto p-4 gap-4">
+
+      <!-- Groupes de demandes -->
+      <div id="grouping-panel">
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Groupes de demandes</h3>
+
+        <!-- Demandes disponibles -->
+        <p class="text-xs text-gray-400 mb-1">Disponibles</p>
+        <div id="available-chips" class="mb-3 p-2 rounded-lg border border-dashed border-gray-200 min-h-8"></div>
+
+        <!-- Liste des groupes -->
+        <div id="groups-list" class="space-y-2 mb-2"></div>
+
+        <!-- Boutons -->
+        <button id="btn-new-group"
+                class="w-full text-xs text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 transition-colors mb-1">
+          + Nouveau groupe
+        </button>
+        <button id="btn-auto-group"
+                class="w-full text-xs text-emerald-700 border border-emerald-200 rounded-lg px-3 py-1.5 hover:bg-emerald-50 transition-colors mb-2">
+          Auto-grouper par client
+        </button>
+        <button id="btn-apply-groups"
+                class="w-full text-xs font-semibold bg-indigo-600 text-white rounded-lg px-3 py-1.5 hover:bg-indigo-700 transition-colors disabled:opacity-50">
+          Appliquer les groupes
+        </button>
+      </div>
+
+      <hr>
+
+      <!-- Légende amorces -->
+      <div>
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Légende des amorces</h3>
+        <div id="legend-container" class="space-y-1 text-xs"></div>
+      </div>
+
+      <hr>
+
+      <!-- Stats -->
+      <div>
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Résumé</h3>
+        <div id="stats-container" class="text-xs text-gray-600 space-y-1"></div>
+      </div>
+
+      <hr>
+
+      <!-- Puits libres (zone de dépôt pour retirer un échantillon) -->
+      <div>
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Puits non assignés</h3>
+        <div id="unplaced-container"
+             class="min-h-16 rounded-lg border-2 border-dashed border-gray-200 p-2 space-y-1"
+             data-dropzone="unplaced">
+          <p class="text-xs text-gray-400 text-center" id="unplaced-empty-msg">Aucun pour l'instant</p>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ===== ZONE PRINCIPALE ===== -->
+    <main class="flex-1 overflow-y-auto p-6">
+
+      <!-- Onglets programme PCR -->
+      <div id="prog-tabs" class="flex flex-wrap gap-2 mb-4"></div>
+
+      <!-- Contenu des programmes -->
+      <div id="prog-panels"></div>
+
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"
+       class="fixed bottom-6 right-6 hidden bg-gray-900 text-white text-sm px-4 py-3 rounded-xl shadow-xl z-50 transition-all">
+  </div>
+
+  <!-- Barre de sélection multiple -->
+  <div id="selection-bar" class="hidden">
+    <span id="selection-count">0 puits sélectionnés</span>
+    <span class="text-indigo-300">·</span>
+    <span class="text-indigo-200 text-xs">Glissez vers la destination</span>
+    <button onclick="clearSelectionGlobal()" class="ml-2 text-xs bg-indigo-700 hover:bg-indigo-600 rounded px-2 py-0.5 transition-colors">
+      Annuler <kbd class="opacity-60">Esc</kbd>
+    </button>
+  </div>
+
+  <!-- Injection des données Flask (doit précéder le module ES6) -->
+  <script>
+    window.LAYOUT            = {{ layout_json | safe }};
+    window.TEMPLATE_KEY      = {{ template_key | tojson }};
+    window.POSITION          = {{ position | tojson }};
+    window.INITIAL_DEMANDES  = {{ demandes | tojson }};
+    window.DEMANDE_CLIENTS   = {{ demande_clients | tojson }};
+  </script>
+
+  <!-- Module principal (ES6) -->
+  <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+  <!-- Pont global pour le bouton inline "Annuler" de la barre de sélection -->
+  <script type="module">
+    import { clearSelection } from "{{ url_for('static', filename='js/selection.js') }}";
+    window.clearSelectionGlobal = clearSelection;
+  </script>
+
+</body>
+</html>
