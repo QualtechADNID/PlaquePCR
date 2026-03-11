@@ -1,3 +1,14 @@
+/* ---- Scrollbars invisibles (sidebar + main) ---- */
+#sidebar,
+main {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* IE / Edge legacy */
+}
+#sidebar::-webkit-scrollbar,
+main::-webkit-scrollbar {
+  display: none;               /* Chrome / Safari / Opera */
+}
+
 /* ---- Grille plaque ---- */
 .plate-grid {
   display: grid;
@@ -16,7 +27,7 @@
   padding: 2px 3px;
   word-break: break-all;
   cursor: grab;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s, outline 0.08s;
   position: relative;
   user-select: none;
   background: #f9fafb;
@@ -34,13 +45,18 @@
   z-index: 10;
 }
 .well.drag-over {
-  background: #fef9c3 !important;
+  background: #fef3c7 !important;
   border-color: #f59e0b !important;
-  transform: scale(1.06);
+  border-style: solid !important;
+  transform: scale(1.08);
+  outline: 2.5px solid #f59e0b;
+  outline-offset: 1px;
+  z-index: 20;
 }
 .well.dragging {
-  opacity: 0.4;
-  transform: scale(0.95);
+  opacity: 0.35;
+  transform: scale(0.93);
+  filter: grayscale(30%);
 }
 /* ---- Sélection multiple ---- */
 .well.selected {
@@ -55,6 +71,85 @@
   border-radius: 4px;
   background: rgba(99, 102, 241, 0.15);
   pointer-events: none;
+}
+/* ---- Puits "blanc" ---- */
+.well.blank {
+  background: #f8fafc;
+  border: 1.5px dashed #94a3b8;
+  color: #475569;
+  cursor: grab;
+}
+.well.blank:hover {
+  background: #f1f5f9;
+  border-color: #64748b;
+  transform: scale(1.03);
+  z-index: 10;
+}
+.well.blank .blank-label {
+  font-style: italic;
+  font-size: 0.6rem;
+  color: #94a3b8;
+  display: block;
+  text-align: center;
+}
+.well.blank .blank-name {
+  font-weight: 600;
+  font-size: 0.62rem;
+  display: block;
+  text-align: center;
+  word-break: break-all;
+}
+
+/* ---- Puits "coupé" (clipboard) ---- */
+.well.cut {
+  opacity: 0.45;
+  border-style: dashed !important;
+  border-color: #f59e0b !important;
+}
+.well.cut::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(245,158,11,0.08) 0px,
+    rgba(245,158,11,0.08) 3px,
+    transparent 3px,
+    transparent 7px
+  );
+  pointer-events: none;
+}
+
+/* ---- Mode paste : preview hover ---- */
+.well.paste-valid {
+  background: #dcfce7 !important;
+  border-color: #16a34a !important;
+  border-style: solid !important;
+  outline: 2.5px solid #16a34a;
+  outline-offset: -1px;
+  transform: scale(1.05);
+  z-index: 15;
+}
+.well.paste-invalid {
+  background: #fee2e2 !important;
+  border-color: #dc2626 !important;
+  border-style: dashed !important;
+  outline: 2.5px solid #dc2626;
+  outline-offset: -1px;
+}
+/* Curseur "paste" sur toute la zone plaques quand clipboard actif */
+body.paste-mode .well {
+  cursor: cell;
+}
+/* En-têtes de ligne/colonne cliquables ---- */
+.well-header.clickable {
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.well-header.clickable:hover {
+  background: #e0e7ff;
+  color: #4338ca;
 }
 #selection-bar {
   position: fixed;
@@ -110,6 +205,7 @@
   width: 280px;
   min-width: 220px;
   flex-shrink: 0;
+  overflow-y: auto;
 }
 .unplaced-item {
   background: #f0fdf4;
@@ -120,10 +216,30 @@
   cursor: grab;
   color: #14532d;
   margin-bottom: 4px;
+  transition: background 0.12s, border-color 0.12s, outline 0.08s;
 }
 .unplaced-item:hover {
   background: #dcfce7;
   border-color: #4ade80;
+}
+.unplaced-item.selected {
+  background: #e0e7ff;
+  border-color: #6366f1;
+  color: #3730a3;
+  outline: 2px solid #6366f1;
+  outline-offset: -2px;
+}
+.unplaced-item.selected:hover {
+  background: #c7d2fe;
+}
+.unplaced-item.dragging {
+  opacity: 0.35;
+  filter: grayscale(20%);
+}
+/* Zone unplaced en mode drop-cible */
+#unplaced-container.drag-target {
+  border-color: #f59e0b;
+  background: #fffbeb;
 }
 
 /* ---- Onglets ---- */
@@ -145,40 +261,60 @@
   margin: 1px;
 }
 
-/* ---- Couleurs par groupe d'amorces ---- */
-/* Spécificité (0,2,0) pour l'emporter sur .well.occupied (0,2,0) — ordre déclaration suffit */
-.well.occupied.well-color-0  { background: #eff6ff; border-color: #93c5fd; }
-.well.occupied.well-color-1  { background: #f0fdf4; border-color: #86efac; }
-.well.occupied.well-color-2  { background: #fef3c7; border-color: #fcd34d; }
-.well.occupied.well-color-3  { background: #fce7f3; border-color: #f9a8d4; }
-.well.occupied.well-color-4  { background: #f3e8ff; border-color: #d8b4fe; }
-.well.occupied.well-color-5  { background: #ecfdf5; border-color: #6ee7b7; }
-.well.occupied.well-color-6  { background: #fff7ed; border-color: #fdba74; }
-.well.occupied.well-color-7  { background: #f1f5f9; border-color: #94a3b8; }
-.well.occupied.well-color-8  { background: #fdf4ff; border-color: #e879f9; }
-.well.occupied.well-color-9  { background: #fff1f2; border-color: #fda4af; }
-/* Hover aussi coloré */
-.well.occupied.well-color-0:hover { background: #dbeafe; border-color: #3b82f6; }
-.well.occupied.well-color-1:hover { background: #dcfce7; border-color: #4ade80; }
-.well.occupied.well-color-2:hover { background: #fde68a; border-color: #f59e0b; }
-.well.occupied.well-color-3:hover { background: #fbcfe8; border-color: #ec4899; }
-.well.occupied.well-color-4:hover { background: #e9d5ff; border-color: #a855f7; }
-.well.occupied.well-color-5:hover { background: #a7f3d0; border-color: #10b981; }
-.well.occupied.well-color-6:hover { background: #fed7aa; border-color: #f97316; }
-.well.occupied.well-color-7:hover { background: #e2e8f0; border-color: #64748b; }
-.well.occupied.well-color-8:hover { background: #f5d0fe; border-color: #d946ef; }
-.well.occupied.well-color-9:hover { background: #fecdd3; border-color: #f43f5e; }
-/* Couleurs pour la légende (cercle de couleur dans le sidebar) */
-.legend-dot-0  { background: #93c5fd; }
-.legend-dot-1  { background: #86efac; }
-.legend-dot-2  { background: #fcd34d; }
-.legend-dot-3  { background: #f9a8d4; }
-.legend-dot-4  { background: #d8b4fe; }
-.legend-dot-5  { background: #6ee7b7; }
-.legend-dot-6  { background: #fdba74; }
-.legend-dot-7  { background: #94a3b8; }
-.legend-dot-8  { background: #e879f9; }
-.legend-dot-9  { background: #fda4af; }
+/* ---- Couleurs par groupe d'amorces (16 couleurs contrastées) ---- */
+/* bg clair lisible, border saturée, hover encore plus saturé        */
+.well.occupied.well-color-0  { background: #dbeafe; border-color: #2563eb; color: #1e3a8a; } /* bleu         */
+.well.occupied.well-color-1  { background: #fce7f3; border-color: #db2777; color: #831843; } /* rose vif     */
+.well.occupied.well-color-2  { background: #dcfce7; border-color: #16a34a; color: #14532d; } /* vert         */
+.well.occupied.well-color-3  { background: #ffedd5; border-color: #ea580c; color: #7c2d12; } /* orange       */
+.well.occupied.well-color-4  { background: #ede9fe; border-color: #7c3aed; color: #3b0764; } /* violet       */
+.well.occupied.well-color-5  { background: #fef9c3; border-color: #a16207; color: #713f12; } /* jaune ocre   */
+.well.occupied.well-color-6  { background: #cffafe; border-color: #0891b2; color: #164e63; } /* cyan         */
+.well.occupied.well-color-7  { background: #fee2e2; border-color: #dc2626; color: #7f1d1d; } /* rouge        */
+.well.occupied.well-color-8  { background: #f0fdf4; border-color: #15803d; color: #14532d; } /* vert sapin   */
+.well.occupied.well-color-9  { background: #fdf4ff; border-color: #9333ea; color: #581c87; } /* mauve        */
+.well.occupied.well-color-10 { background: #fff7ed; border-color: #c2410c; color: #7c2d12; } /* brun-orange  */
+.well.occupied.well-color-11 { background: #f0f9ff; border-color: #0284c7; color: #0c4a6e; } /* bleu ciel    */
+.well.occupied.well-color-12 { background: #fdf2f8; border-color: #c026d3; color: #701a75; } /* fuchsia      */
+.well.occupied.well-color-13 { background: #ecfdf5; border-color: #059669; color: #064e3b; } /* menthe       */
+.well.occupied.well-color-14 { background: #f1f5f9; border-color: #475569; color: #1e293b; } /* gris ardoise */
+.well.occupied.well-color-15 { background: #fff1f2; border-color: #e11d48; color: #881337; } /* cramoisi     */
+
+/* Hover */
+.well.occupied.well-color-0:hover  { background: #bfdbfe; border-color: #1d4ed8; }
+.well.occupied.well-color-1:hover  { background: #fbcfe8; border-color: #be185d; }
+.well.occupied.well-color-2:hover  { background: #bbf7d0; border-color: #15803d; }
+.well.occupied.well-color-3:hover  { background: #fed7aa; border-color: #c2410c; }
+.well.occupied.well-color-4:hover  { background: #ddd6fe; border-color: #6d28d9; }
+.well.occupied.well-color-5:hover  { background: #fef08a; border-color: #854d0e; }
+.well.occupied.well-color-6:hover  { background: #a5f3fc; border-color: #0e7490; }
+.well.occupied.well-color-7:hover  { background: #fecaca; border-color: #b91c1c; }
+.well.occupied.well-color-8:hover  { background: #bbf7d0; border-color: #166534; }
+.well.occupied.well-color-9:hover  { background: #e9d5ff; border-color: #7e22ce; }
+.well.occupied.well-color-10:hover { background: #fed7aa; border-color: #9a3412; }
+.well.occupied.well-color-11:hover { background: #bae6fd; border-color: #0369a1; }
+.well.occupied.well-color-12:hover { background: #f5d0fe; border-color: #a21caf; }
+.well.occupied.well-color-13:hover { background: #a7f3d0; border-color: #047857; }
+.well.occupied.well-color-14:hover { background: #e2e8f0; border-color: #334155; }
+.well.occupied.well-color-15:hover { background: #fecdd3; border-color: #be123c; }
+
+/* Légende (cercle plein saturé) */
+.legend-dot-0  { background: #2563eb; } /* bleu         */
+.legend-dot-1  { background: #db2777; } /* rose vif     */
+.legend-dot-2  { background: #16a34a; } /* vert         */
+.legend-dot-3  { background: #ea580c; } /* orange       */
+.legend-dot-4  { background: #7c3aed; } /* violet       */
+.legend-dot-5  { background: #a16207; } /* jaune ocre   */
+.legend-dot-6  { background: #0891b2; } /* cyan         */
+.legend-dot-7  { background: #dc2626; } /* rouge        */
+.legend-dot-8  { background: #15803d; } /* vert sapin   */
+.legend-dot-9  { background: #9333ea; } /* mauve        */
+.legend-dot-10 { background: #c2410c; } /* brun-orange  */
+.legend-dot-11 { background: #0284c7; } /* bleu ciel    */
+.legend-dot-12 { background: #c026d3; } /* fuchsia      */
+.legend-dot-13 { background: #059669; } /* menthe       */
+.legend-dot-14 { background: #475569; } /* gris ardoise */
+.legend-dot-15 { background: #e11d48; } /* cramoisi     */
 
 /* ---- Groupement de demandes ---- */
 .demande-chip {
@@ -307,4 +443,16 @@
 .plate-add-btn:hover {
   background: #eef2ff;
   border-color: #6366f1;
+}
+
+/* ---- Tableau add-samples ---- */
+#add-samples-tbody tr.table-row-active td {
+  background: #eef2ff; /* indigo-50 */
+}
+#add-samples-tbody tr.table-row-selected td {
+  background: #e0e7ff; /* indigo-100 */
+}
+#add-samples-tbody tr.table-row-active .sample-code,
+#add-samples-tbody tr.table-row-active .sample-dil {
+  background: white;
 }

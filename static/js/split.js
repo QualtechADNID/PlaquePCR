@@ -7,6 +7,7 @@
 import { currentLayout } from './state.js';
 import { ROWS, toast } from './utils.js';
 import { renderAll } from './render.js';
+import { pushState } from './history.js';
 
 /**
  * Sépare le programme `progIdx` en autant de plaques qu'il y a d'amorces atomiques
@@ -67,12 +68,21 @@ export function splitByAmorces(progIdx) {
   const ordreGroupes = [...sortGroupes(groupesCommuns), ...sortGroupes(groupesRares)];
 
   // ── 4. Tri intra-groupe ──────────────────────────────────────────────────────
+  function dilSortKey(dil) {
+    const s = dil != null ? String(dil).trim() : '';
+    if (s.toUpperCase() === 'SM') return [0, 0, ''];
+    const n = parseFloat(s);
+    if (!isNaN(n))                return [1, n, ''];
+    return                               [2, 0, s];
+  }
+  function cmpDil(a, b) {
+    const kA = dilSortKey(a.dilution), kB = dilSortKey(b.dilution);
+    if (kA[0] !== kB[0]) return kA[0] - kB[0];
+    if (kA[1] !== kB[1]) return kA[1] - kB[1];
+    return kA[2].localeCompare(kB[2]);
+  }
   function cmpWells(a, b) {
-    const dA = a.facteur_dilution != null ? String(a.facteur_dilution) : '';
-    const dB = b.facteur_dilution != null ? String(b.facteur_dilution) : '';
-    const dAn = parseFloat(dA), dBn = parseFloat(dB);
-    if (!isNaN(dAn) && !isNaN(dBn) && dAn !== dBn) return dAn - dBn;
-    const dcmp = dA.localeCompare(dB);
+    const dcmp = cmpDil(a, b);
     if (dcmp !== 0) return dcmp;
     const clA = a.code_labo || '', clB = b.code_labo || '';
     const clcmp = clA.localeCompare(clB);
@@ -103,7 +113,7 @@ export function splitByAmorces(progIdx) {
     return (
       (w.code_labo || '') + '||' +
       (w.instance != null ? String(w.instance) : '') + '||' +
-      (w.facteur_dilution != null ? String(w.facteur_dilution) : '')
+      (w.dilution != null ? String(w.dilution) : '')
     );
   }
 
@@ -154,9 +164,9 @@ export function splitByAmorces(progIdx) {
     return { plate_nbr: i + 1, amorce_label: amorce, wells };
   });
 
+  pushState();
   prog.plates = newPlates;
   renderAll();
-
   const nbRares = amorcesRares.length;
   const rareMsg = nbRares > 0
     ? ` (${nbRares} amorce${nbRares > 1 ? 's' : ''} rare${nbRares > 1 ? 's' : ''} en fin)`

@@ -18,9 +18,42 @@
         </a>
         <span class="text-gray-300">|</span>
         <h1 class="text-lg font-semibold">Arrangement des plaques PCR</h1>
+        {% if plan_name %}
+          <span id="plan-name-badge"
+                class="ml-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-0.5">
+            {{ plan_name }}
+          </span>
+        {% endif %}
       </div>
       <div class="flex items-center gap-3">
         <span class="text-xs text-gray-500">Template : <strong>{{ template_key }}</strong> &mdash; Position : <strong>{{ position }}</strong></span>
+        <!-- Boutons Annuler / Rétablir -->
+        <button id="btn-undo"
+                disabled
+                title="Annuler (Ctrl+Z)"
+                class="inline-flex items-center gap-1.5 bg-white hover:bg-gray-50 disabled:opacity-35 disabled:cursor-not-allowed text-gray-600 border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 010 16H5m-2-6l-2 2 2 2"/>
+          </svg>
+          <span id="btn-undo-label">Annuler</span>
+        </button>
+        <button id="btn-redo"
+                disabled
+                title="Rétablir (Ctrl+Y)"
+                class="inline-flex items-center gap-1.5 bg-white hover:bg-gray-50 disabled:opacity-35 disabled:cursor-not-allowed text-gray-600 border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a8 8 0 000 16h8m2-6l2 2-2 2"/>
+          </svg>
+          <span id="btn-redo-label">Rétablir</span>
+        </button>
+        <button id="btn-save"
+                class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          Sauvegarder
+        </button>
         <button id="btn-export"
                 class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-medium shadow transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -91,6 +124,36 @@
         </div>
       </div>
 
+      <hr>
+
+      <!-- Fichiers supplémentaires -->
+      <div>
+        <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Fichiers</h3>
+        <button id="btn-add-samples"
+                class="w-full text-xs text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 transition-colors flex items-center gap-1.5 justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Ajouter des échantillons
+        </button>
+        <button id="btn-add-client-file"
+                class="w-full text-xs text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors mb-1 flex items-center gap-1.5 justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+          </svg>
+          Ajouter le fichier client
+        </button>
+        <button id="btn-add-data-file"
+                class="w-full text-xs text-emerald-700 border border-emerald-200 rounded-lg px-3 py-1.5 hover:bg-emerald-50 transition-colors flex items-center gap-1.5 justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          Charger un nouveau fichier
+        </button>
+      </div>
+
     </aside>
 
     <!-- ===== ZONE PRINCIPALE ===== -->
@@ -110,14 +173,234 @@
        class="fixed bottom-6 right-6 hidden bg-gray-900 text-white text-sm px-4 py-3 rounded-xl shadow-xl z-50 transition-all">
   </div>
 
+  <!-- Modale de sauvegarde -->
+  <div id="save-modal"
+       class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-4">Sauvegarder le plan</h2>
+      <label for="save-name-input" class="block text-sm font-medium text-gray-700 mb-1">Nom du plan</label>
+      <input id="save-name-input" type="text" placeholder="ex: Batch mars 2026"
+             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-5" />
+      <div class="flex justify-end gap-3">
+        <button id="save-modal-cancel"
+                class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Annuler
+        </button>
+        <button id="save-modal-confirm"
+                class="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+          Sauvegarder
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Barre de sélection multiple -->
   <div id="selection-bar" class="hidden">
     <span id="selection-count">0 puits sélectionnés</span>
     <span class="text-indigo-300">·</span>
-    <span class="text-indigo-200 text-xs">Glissez vers la destination</span>
+    <span class="text-indigo-200 text-xs">Glissez vers la destination ou appuyez sur <kbd class="opacity-70">Suppr</kbd></span>
     <button onclick="clearSelectionGlobal()" class="ml-2 text-xs bg-indigo-700 hover:bg-indigo-600 rounded px-2 py-0.5 transition-colors">
-      Annuler <kbd class="opacity-60">Esc</kbd>
+      Désélectionner <kbd class="opacity-60">Esc</kbd>
     </button>
+  </div>
+
+  <!-- Menu contextuel puits vide (clic droit) -->
+  <div id="well-context-menu"
+       class="hidden fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-40 text-sm">
+    <button id="ctx-add-blank"
+            class="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Ajouter un blanc
+    </button>
+    <button id="ctx-remove-blank"
+            class="hidden w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4h6v3M3 7h18"/>
+      </svg>
+      Supprimer le blanc
+    </button>
+  </div>
+
+  <!-- Modale de saisie du nom du blanc -->
+  <div id="blank-modal"
+       class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">Ajouter un blanc</h2>
+      <p class="text-xs text-gray-500 mb-4">Nommez ce puits blanc (ex : NTC, Eau, Témoin négatif…)</p>
+      <label for="blank-name-input" class="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+      <input id="blank-name-input" type="text" placeholder="ex: NTC"
+             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-5" />
+      <div class="flex justify-end gap-3">
+        <button id="blank-modal-cancel"
+                class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Annuler
+        </button>
+        <button id="blank-modal-confirm"
+                class="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+          Ajouter
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : ajouter fichier client -->
+  <div id="client-file-modal"
+       class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">Fichier client (LV)</h2>
+      <p class="text-xs text-gray-500 mb-4">
+        Ce fichier doit contenir les colonnes <strong>Demande</strong> et <strong>Nom Demandeur</strong>.
+        Il servira à l'auto-groupement par client.
+      </p>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Fichier Excel</label>
+      <input id="client-file-input" type="file" accept=".xls,.xlsx"
+             class="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                    file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700
+                    hover:file:bg-indigo-100 mb-5 cursor-pointer" />
+      <div id="client-file-error" class="hidden text-xs text-red-600 mb-3"></div>
+      <div class="flex justify-end gap-3">
+        <button id="client-file-cancel"
+                class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Annuler
+        </button>
+        <button id="client-file-confirm"
+                class="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                disabled>
+          Charger
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : charger nouveau fichier de données -->
+  <div id="data-file-modal"
+       class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">Nouveau fichier de données</h2>
+      <p class="text-xs text-gray-500 mb-4">
+        Si de nouveaux échantillons sont trouvés, ils seront ajoutés aux puits non-assignés.
+        Si aucun échantillon ne correspond à l'existant, la plaque sera réinitialisée.
+      </p>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Fichier Excel (LV)</label>
+      <input id="data-file-input" type="file" accept=".xls,.xlsx"
+             class="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                    file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700
+                    hover:file:bg-emerald-100 mb-5 cursor-pointer" />
+      <div id="data-file-error" class="hidden text-xs text-red-600 mb-3"></div>
+      <div class="flex justify-end gap-3">
+        <button id="data-file-cancel"
+                class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Annuler
+        </button>
+        <button id="data-file-confirm"
+                class="px-4 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                disabled>
+          Charger
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : ajouter des échantillons manuellement -->
+  <div id="add-samples-modal"
+       class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 flex flex-col gap-4"
+         style="max-height:90vh;">
+
+      <h2 class="text-base font-semibold text-gray-800">Ajouter des échantillons</h2>
+
+      <!-- Ligne 1 : couples d'amorces -->
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">
+          Couple(s) d'amorces
+          <span class="font-normal text-gray-400">(sélection multiple possible)</span>
+        </label>
+        <!-- Searchable multi-select custom -->
+        <div id="couples-picker" class="relative">
+          <div id="couples-tags"
+               class="min-h-9 flex flex-wrap gap-1 items-center border border-gray-300 rounded-lg px-2 py-1.5
+                      cursor-text focus-within:ring-2 focus-within:ring-indigo-400 bg-white">
+            <input id="couples-search"
+                   type="text"
+                   placeholder="Rechercher un couple…"
+                   autocomplete="off"
+                   class="flex-1 min-w-32 text-xs outline-none bg-transparent py-0.5" />
+          </div>
+          <ul id="couples-dropdown"
+              class="hidden absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200
+                     rounded-lg shadow-lg max-h-52 overflow-y-auto text-xs">
+          </ul>
+        </div>
+      </div>
+
+      <!-- Ligne 2 : nombre + programme + bouton -->
+      <div class="flex gap-4 items-end">
+        <div class="flex-1">
+          <label class="block text-xs font-medium text-gray-600 mb-1">
+            Nombre d'échantillons
+          </label>
+          <input id="add-samples-count"
+                 type="number" min="1" max="500" value="1"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
+                        focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </div>
+        <div class="flex-[2]">
+          <label class="block text-xs font-medium text-gray-600 mb-1">
+            Programme PCR
+          </label>
+          <select id="add-samples-programme"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            <option value="">— Choisir un programme —</option>
+          </select>
+        </div>
+        <button id="add-samples-generate"
+                class="px-4 py-2 text-sm font-medium bg-indigo-50 text-indigo-700
+                       border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors whitespace-nowrap">
+          Générer le tableau
+        </button>
+      </div>
+
+      <!-- Tableau de saisie -->
+      <div class="overflow-auto flex-1" style="min-height:0;">
+        <table id="add-samples-table"
+               class="w-full text-xs border-collapse hidden">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+              <th class="px-3 py-2 text-left font-semibold border-b border-gray-200 w-8">#</th>
+              <th class="px-3 py-2 text-left font-semibold border-b border-gray-200">Code labo</th>
+              <th class="px-3 py-2 text-left font-semibold border-b border-gray-200">Dilution <span class="font-normal normal-case text-gray-400">(optionnel, séparateur ;)</span></th>
+            </tr>
+          </thead>
+          <tbody id="add-samples-tbody"></tbody>
+        </table>
+        <p id="add-samples-hint"
+           class="text-xs text-gray-400 italic text-center pt-6">
+          Choisissez un nombre d'échantillons et cliquez sur "Générer le tableau".
+        </p>
+      </div>
+
+      <!-- Erreur -->
+      <p id="add-samples-error" class="hidden text-xs text-red-600"></p>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-3 pt-2 border-t border-gray-100">
+        <button id="add-samples-cancel"
+                class="px-4 py-2 text-sm text-gray-600 border border-gray-300
+                       rounded-lg hover:bg-gray-50 transition-colors">
+          Annuler
+        </button>
+        <button id="add-samples-confirm"
+                class="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white
+                       rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                disabled>
+          Ajouter aux non-assignés
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Injection des données Flask (doit précéder le module ES6) -->
@@ -127,6 +410,8 @@
     window.POSITION          = {{ position | tojson }};
     window.INITIAL_DEMANDES  = {{ demandes | tojson }};
     window.DEMANDE_CLIENTS   = {{ demande_clients | tojson }};
+    window.PLAN_ID           = {{ plan_id | tojson }};
+    window.PLAN_NAME         = {{ plan_name | tojson }};
   </script>
 
   <!-- Module principal (ES6) -->

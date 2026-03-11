@@ -7,8 +7,11 @@ from generate_plaque.function_pcr import (
     prepare_plates_data,
     prepare_plates_data_grouped,
     generate_plaque_from_layout,
+    df_from_layout,
 )
-import os, re, json, unicodedata, pickle
+import os, re, json, unicodedata, pickle, sqlite3, urllib.request
+
+from datetime import datetime, timezone
 import pandas as pd
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -25,6 +28,32 @@ TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 TMP_DIR = APP_DIR / "tmp"
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 REG_PATH = TEMPLATE_DIR / "templates.json"
+DB_PATH = APP_DIR / "plans.db"
+
+# --- Base de données SQLite ---
+def get_db():
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS plan (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                name             TEXT NOT NULL,
+                year             INTEGER NOT NULL,
+                created_at       TEXT NOT NULL,
+                updated_at       TEXT NOT NULL,
+                template_key     TEXT NOT NULL,
+                position         TEXT NOT NULL,
+                original_filename TEXT,
+                layout_json      TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+
+init_db()
 
 # --- Utilitaires ---
 def load_registry() -> dict:
@@ -263,6 +292,8 @@ def arrange():
         templates=reg,
         demandes=demandes,
         demande_clients=demande_clients,
+        plan_id=None,
+        plan_name="",
     )
 
 
@@ -360,3 +391,387 @@ def export():
         download_name=download_name,
         max_age=0,
     )
+
+
+# ---------------------------------------------------------------------------
+# Plans sauvegardés
+# ---------------------------------------------------------------------------
+
+def extract_demandes_from_layout(layout: dict) -> list[str]:
+    """Extrait les demandes uniques présentes dans un layout JSON."""
+    demandes = set()
+    for prog in layout.get("programmes", []):
+        for plate in prog.get("plates", []):
+            for well in plate.get("wells", {}).values():
+                d = (well or {}).get("demande", "")
+                if d and d != "nan":
+                    demandes.add(d)
+    return sorted(demandes)
+
+
+@app.get("/sessions")
+def sessions_list():
+    """Liste tous les plans sauvegardés, groupés par année."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, name, year, created_at, updated_at, template_key, original_filename "
+            "FROM plan ORDER BY updated_at DESC"
+        ).fetchall()
+
+    # Grouper par année
+    by_year: dict[int, list] = {}
+    for row in rows:
+        y = row["year"]
+        by_year.setdefault(y, []).append(dict(row))
+
+    years_sorted = sorted(by_year.keys(), reverse=True)
+    return render_template("sessions.html", by_year=by_year, years=years_sorted)
+
+
+@app.post("/save")
+def save_plan():
+    """
+    Crée ou met à jour un plan sauvegardé.
+    Body JSON: {
+      "plan_id": null | int,
+      "name": str,
+      "layout": dict,
+      "template_key": str,
+      "position": str,
+      "original_filename": str
+    }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify(error="Données manquantes."), 400
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify(error="Nom manquant."), 400
+
+    layout = data.get("layout")
+    if not layout:
+        return jsonify(error="Layout manquant."), 400
+
+    template_key     = data.get("template_key") or session.get("template_key", "")
+    position         = data.get("position") or session.get("position", "H5")
+    original_filename = data.get("original_filename") or session.get("original_filename", "")
+    plan_id          = data.get("plan_id")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    year = int(now[:4])
+    layout_json = json.dumps(layout, ensure_ascii=False)
+
+    with get_db() as conn:
+        if plan_id:
+            # Vérifier que le plan existe
+            existing = conn.execute("SELECT id FROM plan WHERE id = ?", (plan_id,)).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE plan SET name=?, updated_at=?, template_key=?, position=?, "
+                    "original_filename=?, layout_json=? WHERE id=?",
+                    (name, now, template_key, position, original_filename, layout_json, plan_id)
+                )
+                conn.commit()
+                return jsonify(plan_id=plan_id, name=name)
+
+        # Nouveau plan
+        cur = conn.execute(
+            "INSERT INTO plan (name, year, created_at, updated_at, template_key, position, "
+            "original_filename, layout_json) VALUES (?,?,?,?,?,?,?,?)",
+            (name, year, now, now, template_key, position, original_filename, layout_json)
+        )
+        conn.commit()
+        return jsonify(plan_id=cur.lastrowid, name=name)
+
+
+@app.get("/sessions/<int:plan_id>")
+def open_plan(plan_id: int):
+    """Charge un plan sauvegardé dans l'interface arrange.html."""
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM plan WHERE id = ?", (plan_id,)).fetchone()
+    if not row:
+        flash("Plan introuvable.")
+        return redirect(url_for("sessions_list"))
+
+    layout = json.loads(row["layout_json"])
+    demandes = extract_demandes_from_layout(layout)
+    reg = load_registry()
+
+    # Initialiser la session Flask et recréer le pickle pour /regroup
+    session_id = session.get("_id") or os.urandom(16).hex()
+    session["_id"] = session_id
+    session["template_key"] = row["template_key"]
+    session["position"] = row["position"]
+    session["original_filename"] = row["original_filename"]
+
+    pkl_path = TMP_DIR / f"{session_id}.pkl"
+    try:
+        df = df_from_layout(layout)
+        with pkl_path.open("wb") as fh:
+            pickle.dump(df, fh)
+    except Exception:
+        pass  # Non bloquant : /regroup retournera "Session expirée" si ça échoue
+
+    return render_template(
+        "arrange.html",
+        layout=layout,
+        layout_json=row["layout_json"],
+        template_key=row["template_key"],
+        position=row["position"],
+        templates=reg,
+        demandes=demandes,
+        demande_clients={},
+        plan_id=plan_id,
+        plan_name=row["name"],
+    )
+
+
+@app.delete("/sessions/<int:plan_id>")
+def delete_plan(plan_id: int):
+    """Supprime un plan sauvegardé."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM plan WHERE id = ?", (plan_id,))
+        conn.commit()
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Ajout tardif d'un fichier client (dans la page /arrange)
+# ---------------------------------------------------------------------------
+
+@app.post("/add-client-file")
+def add_client_file():
+    """
+    Reçoit un fichier LV client (Excel) et retourne le mapping demande → client.
+    Body : multipart/form-data avec champ "lv_file".
+    Retourne : {"demande_clients": {"260203-00052": "Dupont", ...}}
+    """
+    lv_file = request.files.get("lv_file")
+    if not lv_file or not lv_file.filename:
+        return jsonify(error="Aucun fichier fourni."), 400
+
+    ext = Path(lv_file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXT:
+        return jsonify(error="Le fichier doit être un Excel (.xls ou .xlsx)."), 400
+
+    try:
+        df_lv = pd.read_excel(lv_file)
+    except Exception as e:
+        return jsonify(error=f"Impossible de lire le fichier : {e}"), 400
+
+    if "Demande" not in df_lv.columns or "Nom Demandeur" not in df_lv.columns:
+        return jsonify(error="Le fichier doit contenir les colonnes 'Demande' et 'Nom Demandeur'."), 400
+
+    demande_clients = {
+        str(row["Demande"]).strip(): str(row["Nom Demandeur"]).strip()
+        for _, row in df_lv.iterrows()
+        if pd.notna(row["Demande"]) and pd.notna(row["Nom Demandeur"])
+    }
+    return jsonify(demande_clients=demande_clients)
+
+
+# ---------------------------------------------------------------------------
+# Ajout d'un nouveau fichier de données (merge ou reset)
+# ---------------------------------------------------------------------------
+
+@app.post("/add-data-file")
+def add_data_file():
+    """
+    Reçoit un nouveau fichier LV de données et le layout actuel (JSON string).
+    Compare les échantillons du nouveau fichier avec ceux déjà placés ou en attente.
+
+    Logique :
+    - Collecte tous les (code_labo, amorces, dilution, instance) déjà présents dans
+      le layout (wells + unplaced).
+    - Si AUCUN échantillon du nouveau fichier ne correspond à un existant → reset complet :
+      retourne le nouveau layout calculé.
+    - Sinon → merge : retourne uniquement les nouveaux échantillons (ceux absents du
+      layout courant) sous forme de liste "new_samples" à ajouter aux puits non-assignés.
+
+    Body : multipart/form-data
+      - excel_file   : nouveau fichier LV (.xls/.xlsx)
+      - layout_json  : layout actuel (JSON string)
+      - unplaced_json: puits non-assignés actuels (JSON string, tableau)
+      - sort_similarity : "true"/"false" (optionnel, défaut true)
+      - group_dilutions : "true"/"false" (optionnel, défaut false)
+
+    Retourne :
+      {
+        "mode":        "reset" | "merge",
+        "new_samples": [...],    // mode=merge : nouveaux puits à ajouter aux non-assignés
+        "layout":      {...},    // mode=reset  : nouveau layout complet
+        "new_count":   int,
+        "existing_count": int,
+      }
+    """
+    excel_file = request.files.get("excel_file")
+    if not excel_file or not excel_file.filename:
+        return jsonify(error="Aucun fichier fourni."), 400
+
+    ext = Path(excel_file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXT:
+        return jsonify(error="Le fichier doit être un Excel (.xls ou .xlsx)."), 400
+
+    layout_str   = request.form.get("layout_json", "{}")
+    unplaced_str = request.form.get("unplaced_json", "[]")
+    sort_similarity = request.form.get("sort_similarity", "true").lower() == "true"
+    group_dilutions = request.form.get("group_dilutions", "false").lower() == "true"
+
+    try:
+        current_layout = json.loads(layout_str)
+        current_unplaced = json.loads(unplaced_str)
+    except Exception:
+        return jsonify(error="Layout JSON invalide."), 400
+
+    try:
+        df_new = read_excel_file(excel_file)
+    except Exception as e:
+        return jsonify(error=f"Impossible de lire le fichier : {e}"), 400
+
+    # ── Construire un set d'identifiants des échantillons existants ───────────
+    # Clé : (code_labo, amorces, dilution, instance) — insensible aux duplicats
+    def sample_key(w: dict) -> tuple:
+        return (
+            str(w.get("code_labo", "") or "").strip(),
+            str(w.get("amorces", "") or "").strip(),
+            str(w.get("dilution", "") or "").strip(),
+            str(w.get("instance", "") or "").strip(),
+        )
+
+    existing_keys: set[tuple] = set()
+    # Depuis le layout (wells dans les plaques)
+    for prog in current_layout.get("programmes", []):
+        for plate in prog.get("plates", []):
+            for w in plate.get("wells", {}).values():
+                if w and not w.get("is_blank"):
+                    existing_keys.add(sample_key(w))
+    # Depuis les puits non-assignés
+    for w in current_unplaced:
+        if w and not w.get("is_blank"):
+            existing_keys.add(sample_key(w))
+
+    # ── Construire les échantillons du nouveau fichier ────────────────────────
+    df_new["Dilution"] = df_new["Dilution"].fillna("").astype(str).replace("nan", "")
+    df_new["Instance"] = df_new["Instance"].fillna("").astype(str).replace("nan", "")
+
+    def df_row_key(row) -> tuple:
+        return (
+            str(row["Code labo"]).strip(),
+            str(row["Amorces"]).strip(),
+            str(row["Dilution"]).strip(),
+            str(row["Instance"]).strip(),
+        )
+
+    new_rows = []
+    overlap_count = 0
+    for _, row in df_new.iterrows():
+        k = df_row_key(row)
+        if k in existing_keys:
+            overlap_count += 1
+        else:
+            new_rows.append(row)
+
+    total_new_file = len(df_new)
+    truly_new = len(new_rows)
+
+    # ── Décision reset vs merge ───────────────────────────────────────────────
+    if overlap_count == 0:
+        # Aucun échantillon en commun → reset complet
+        try:
+            layout = prepare_plates_data(df_new, sort_by_similarity=sort_similarity, group_dilutions=group_dilutions)
+        except Exception as e:
+            return jsonify(error=f"Erreur de préparation des plaques : {e}"), 500
+
+        # Mettre à jour le pickle de session pour /regroup
+        session_id = session.get("_id", "")
+        if session_id:
+            pkl_path = TMP_DIR / f"{session_id}.pkl"
+            try:
+                with pkl_path.open("wb") as fh:
+                    pickle.dump(df_new, fh)
+            except Exception:
+                pass
+
+        return jsonify(
+            mode="reset",
+            layout=layout,
+            new_count=total_new_file,
+            existing_count=0,
+        )
+
+    # Mode merge : construire la liste des nouveaux puits (non-assignés à ajouter)
+    # Reconstruire un mini-DataFrame avec seulement les nouvelles lignes
+    if not new_rows:
+        return jsonify(
+            mode="merge",
+            new_samples=[],
+            new_count=0,
+            existing_count=overlap_count,
+        )
+
+    from generate_plaque.function_pcr import make_content
+
+    new_samples = []
+    for row in new_rows:
+        instance_val = str(row.get("Instance", "")).strip()
+        new_samples.append({
+            "content":   make_content(row),
+            "code_labo": str(row["Code labo"]).strip(),
+            "amorces":   str(row["Amorces"]).strip(),
+            "programme": str(row.get("ProgrammePCR", "")).strip(),
+            "dilution":  str(row.get("Dilution", "")).strip(),
+            "instance":  instance_val,
+            "demande":   str(row.get("Demande", "")).strip(),
+        })
+
+    # Mettre à jour le pickle en fusionnant les DataFrames
+    session_id = session.get("_id", "")
+    if session_id:
+        pkl_path = TMP_DIR / f"{session_id}.pkl"
+        try:
+            if pkl_path.exists():
+                with pkl_path.open("rb") as fh:
+                    df_old = pickle.load(fh)
+                df_merged = pd.concat([df_old, df_new], ignore_index=True).drop_duplicates()
+            else:
+                df_merged = df_new
+            with pkl_path.open("wb") as fh:
+                pickle.dump(df_merged, fh)
+        except Exception:
+            pass
+
+    return jsonify(
+        mode="merge",
+        new_samples=new_samples,
+        new_count=truly_new,
+        existing_count=overlap_count,
+    )
+
+
+# ── Proxy : liste des programmes PCR ─────────────────────────────────────────
+
+@app.route("/api/programmes_pcr")
+def programmes_pcr():
+    """Proxifie la requête vers le serveur interne pour éviter les erreurs CORS."""
+    try:
+        with urllib.request.urlopen(
+            "http://adnid-bioinfo:3456/programme_pcr_list", timeout=5
+        ) as r:
+            data = json.loads(r.read().decode())
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"programmes": [], "error": str(e)}), 502
+
+
+@app.route("/api/couples")
+def couples():
+    """Proxifie la liste des couples d'amorces pour éviter les erreurs CORS."""
+    try:
+        with urllib.request.urlopen(
+            "http://adnid-bioinfo:3456/couples_list", timeout=5
+        ) as r:
+            data = json.loads(r.read().decode())
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"couples": [], "error": str(e)}), 502
