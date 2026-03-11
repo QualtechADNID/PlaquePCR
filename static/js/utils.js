@@ -19,20 +19,25 @@ export function toast(msg, duration = 2500) {
 }
 
 /**
- * Construit la map amorces → index couleur (0–9) pour un programme.
- * @param {object} progData  — un élément de currentLayout.programmes
+ * Construit la map amorces → index couleur (0–15) pour l'ensemble du layout.
+ * L'ordre est déterministe (tri alphabétique) pour que les couleurs
+ * ne changent pas quand les puits sont déplacés, et cohérent entre tous
+ * les programmes.
+ * @param {object} layout  — currentLayout complet ({ programmes: [...] })
  * @returns {object}
  */
-export function buildAmorceColorMap(progData) {
-  const map = {};
-  let idx = 0;
-  progData.plates.forEach(plate => {
-    Object.values(plate.wells).forEach(w => {
-      if (w && w.amorces && !(w.amorces in map)) {
-        map[w.amorces] = idx % 10;
-        idx++;
-      }
+export function buildAmorceColorMap(layout) {
+  const amorcesSet = new Set();
+  layout.programmes.forEach(prog => {
+    prog.plates.forEach(plate => {
+      Object.values(plate.wells).forEach(w => {
+        if (w && w.amorces && !w.is_blank) amorcesSet.add(w.amorces);
+      });
     });
+  });
+  const map = {};
+  [...amorcesSet].sort().forEach((amorces, idx) => {
+    map[amorces] = idx % 16;
   });
   return map;
 }

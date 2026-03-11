@@ -2,7 +2,7 @@
 import pandas as pd
 from itertools import zip_longest
 from openpyxl import load_workbook
-from openpyxl.styles import Alignment, Font, Border, Side
+from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
 from io import BytesIO
@@ -14,6 +14,22 @@ def excel_coord_to_index(cell_ref: str) -> tuple[int, int]:
 
 def split_clean(s):
     return [t.strip() for t in str(s).split(";") if t.strip() != ""]
+
+def dilution_sort_key(dil) -> tuple:
+    """
+    Ordre de tri pour une valeur de dilution :
+      0 → SM (sérum pur, toujours en premier)
+      1 → valeur numérique (croissant : 10, 100, 1000, …)
+      2 → autres chaînes (ordre alphabétique)
+    Retourne un tuple (tier, val) comparable par pandas / Python.
+    """
+    s = str(dil).strip() if dil is not None and str(dil).strip() != "" else ""
+    if s.upper() == "SM":
+        return (0, 0.0, "")
+    try:
+        return (1, float(s), "")
+    except ValueError:
+        return (2, 0.0, s)
 
 def amorce_similarity_key(amorces_str: str, reference_sets: list[set]) -> tuple:
     """
@@ -27,12 +43,16 @@ def amorce_similarity_key(amorces_str: str, reference_sets: list[set]) -> tuple:
     max_common = max(len(my_set & ref) for ref in reference_sets)
     return (-max_common,)
 
-def sort_by_primer_similarity(group: pd.DataFrame) -> pd.DataFrame:
+def sort_by_primer_similarity(group: pd.DataFrame, group_dilutions: bool = False) -> pd.DataFrame:
     """
     Trie les échantillons par similitude d'amorces :
     1. Trouve le groupe d'amorces le plus fréquent → placé en premier
     2. Les suivants sont ceux qui partagent le plus d'amorces avec les déjà placés
     3. Les amorces totalement différentes vont à la fin
+
+    Si group_dilutions=True, la dilution est triée en priorité dans chaque groupe
+    d'amorces (avant le code labo), ce qui regroupe les échantillons de même dilution
+    ensemble.
     """
     group = group.copy()
 
@@ -48,11 +68,19 @@ def sort_by_primer_similarity(group: pd.DataFrame) -> pd.DataFrame:
         lambda s: -len(s & dominant)  # négatif pour tri décroissant
     )
 
-    # Tri : similitude décroissante, puis amorces alphabétique, puis code labo
+    # Tri : similitude décroissante, puis amorces alphabétique
+    # Si group_dilutions : Dilution avant Code labo (regrouper par dilution)
+    # Sinon              : Code labo avant Dilution (comportement par défaut)
+    if group_dilutions:
+        sort_cols = ["_sim_score", "Amorces", "_dil_key", "Code labo", "Instance_num"]
+    else:
+        sort_cols = ["_sim_score", "Amorces", "Code labo", "Instance_num", "_dil_key"]
+
+    group["_dil_key"] = group["Dilution"].apply(dilution_sort_key)
     sorted_group = group.sort_values(
-        ["_sim_score", "Amorces", "Dilution", "Code labo", "Instance_num"],
-        ascending=[True, True, True, True, True]
-    ).drop(columns=["_amorce_set", "_sim_score"])
+        sort_cols,
+        ascending=[True] * len(sort_cols)
+    ).drop(columns=["_amorce_set", "_sim_score", "_dil_key"])
 
     return sorted_group
 
@@ -60,19 +88,21 @@ def sort_within_program_dil(group: pd.DataFrame) -> pd.DataFrame:
     counts = group["Amorces"].value_counts()
     group = group.copy()
     group["Amorce_count"] = group["Amorces"].map(counts)
+    group["_dil_key"] = group["Dilution"].apply(dilution_sort_key)
     return (group.sort_values(
-        ["Amorce_count", "Amorces","Dilution" ,"Code labo", "Instance_num"],
-        ascending=[False, True, True , True, True]
-    ).drop(columns="Amorce_count"))
+        ["Amorce_count", "Amorces", "_dil_key", "Code labo", "Instance_num"],
+        ascending=[False, True, True, True, True]
+    ).drop(columns=["Amorce_count", "_dil_key"]))
 
 def sort_within_program(group: pd.DataFrame) -> pd.DataFrame:
     counts = group["Amorces"].value_counts()
     group = group.copy()
     group["Amorce_count"] = group["Amorces"].map(counts)
+    group["_dil_key"] = group["Dilution"].apply(dilution_sort_key)
     return (group.sort_values(
-        ["Amorce_count", "Amorces","Code labo", "Instance_num","Dilution"],
-        ascending=[False, True, True , True, True]
-    ).drop(columns="Amorce_count"))
+        ["Amorce_count", "Amorces", "Code labo", "Instance_num", "_dil_key"],
+        ascending=[False, True, True, True, True]
+    ).drop(columns=["Amorce_count", "_dil_key"]))
 
 def assign_plates_columns(group: pd.DataFrame, plate_size: int = 96) -> pd.DataFrame:
     """
@@ -204,6 +234,39 @@ def read_excel_file(file_like) -> pd.DataFrame:
     return result
 
 
+def df_from_layout(layout: dict) -> pd.DataFrame:
+    """
+    Reconstruit un DataFrame pandas (même structure que read_excel_file) à partir
+    d'un layout JSON. Utilisé pour recréer le pickle de session lors du chargement
+    d'un plan sauvegardé, afin que /regroup puisse fonctionner.
+    """
+    rows = []
+    for prog in layout.get("programmes", []):
+        prog_name = prog.get("name", "")
+        for plate in prog.get("plates", []):
+            for well in plate.get("wells", {}).values():
+                if not well or well.get("is_blank"):
+                    continue
+                rows.append({
+                    "Code labo":  str(well.get("code_labo", "") or ""),
+                    "Instance":   str(well.get("instance", "1") or "1"),
+                    "Amorces":    str(well.get("amorces", "") or ""),
+                    "ProgrammePCR": prog_name,
+                    "Enzyme":     "",
+                    "Dilution":   str(well.get("dilution", "") or ""),
+                    "Echantillon": str(well.get("echantillon", "") or ""),
+                    "Demande":    str(well.get("demande", "") or ""),
+                })
+    if not rows:
+        return pd.DataFrame(columns=["Code labo", "Instance", "Amorces", "ProgrammePCR",
+                                      "Enzyme", "Dilution", "Echantillon", "Demande"])
+    df = pd.DataFrame(rows)
+    # Dédupliquer — chaque échantillon (code_labo, instance, amorces, dilution) doit
+    # apparaître une seule fois dans le df pour que /regroup ne le place pas en double.
+    df = df.drop_duplicates(subset=["Code labo", "Instance", "Amorces", "Dilution"])
+    return df
+
+
 def make_content(x: pd.Series) -> str:
     code = str(x["Code labo"])
     amorce = str(x["Amorces"])
@@ -257,7 +320,7 @@ def prepare_plates_data(
     if sort_by_similarity:
         df_sorted = (
             df.groupby("ProgrammePCR", group_keys=False)
-            .apply(sort_by_primer_similarity)
+            .apply(sort_by_primer_similarity, group_dilutions=group_dilutions)
             .reset_index(drop=True)
         )
     elif group_dilutions:
@@ -303,6 +366,48 @@ def prepare_plates_data(
     return result
 
 
+# Palette de 16 couleurs (fond de cellule) — miroir exact du CSS arrange.css
+_AMORCE_PALETTE = [
+    "dbeafe",  # 0  bleu
+    "fce7f3",  # 1  rose vif
+    "dcfce7",  # 2  vert
+    "ffedd5",  # 3  orange
+    "ede9fe",  # 4  violet
+    "fef9c3",  # 5  jaune ocre
+    "cffafe",  # 6  cyan
+    "fee2e2",  # 7  rouge
+    "f0fdf4",  # 8  vert sapin
+    "fdf4ff",  # 9  mauve
+    "fff7ed",  # 10 brun-orange
+    "f0f9ff",  # 11 bleu ciel
+    "fdf2f8",  # 12 fuchsia
+    "ecfdf5",  # 13 menthe
+    "f1f5f9",  # 14 gris ardoise
+    "fff1f2",  # 15 cramoisi
+]
+
+_AMORCE_FILLS = [PatternFill(fill_type="solid", fgColor=c) for c in _AMORCE_PALETTE]
+
+
+def build_amorce_color_map(layout: dict) -> dict[str, PatternFill]:
+    """
+    Reproduit la logique de buildAmorceColorMap() (utils.js) :
+    trie alphabétiquement les valeurs `amorces` uniques sur l'ensemble
+    du layout (tous programmes confondus) et leur assigne un index 0–15
+    (cyclique). Retourne { amorces_str: PatternFill }.
+    """
+    amorces_set: set[str] = set()
+    for prog_data in layout.get("programmes", []):
+        for plate in prog_data.get("plates", []):
+            for well in plate.get("wells", {}).values():
+                if well and not well.get("is_blank") and well.get("amorces"):
+                    amorces_set.add(well["amorces"])
+    color_map: dict[str, PatternFill] = {}
+    for idx, amorces in enumerate(sorted(amorces_set)):
+        color_map[amorces] = _AMORCE_FILLS[idx % 16]
+    return color_map
+
+
 def generate_plaque_from_layout(
     layout: dict,
     template_file: str,
@@ -321,6 +426,8 @@ def generate_plaque_from_layout(
     border = Border(top=thin, bottom=thin, left=thin, right=thin)
     row_order = {ch: i for i, ch in enumerate("ABCDEFGH")}
     current_row = row_start
+
+    amorce_color_map = build_amorce_color_map(layout)
 
     for prog_data in layout["programmes"]:
         prog = prog_data["name"]
@@ -367,10 +474,18 @@ def generate_plaque_from_layout(
                 cell.alignment = Alignment(horizontal="center")
                 for j, col_num in enumerate(cols_used):
                     well_key = row_lbl + str(col_num).zfill(2)
-                    val = wells.get(well_key, {}).get("content", None)
+                    well_data = wells.get(well_key, None)
+                    val = well_data.get("content", None) if well_data else None
                     c = ws.cell(row=start_r + i, column=col + j + 1, value=val)
                     c.border = border
                     c.alignment = Alignment(horizontal="center")
+                    # Puits blanc : italique + couleur grise
+                    if well_data and well_data.get("is_blank"):
+                        c.font = Font(italic=True, color="888888")
+                    elif well_data and well_data.get("amorces"):
+                        fill = amorce_color_map.get(well_data["amorces"])
+                        if fill:
+                            c.fill = fill
 
             end_r = start_r + len(rows_used) - 1
             end_c = col + nb_cols - 1

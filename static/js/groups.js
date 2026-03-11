@@ -8,6 +8,7 @@
 import { currentLayout, setCurrentLayout, setActiveProgIdx, setUnplacedItems } from './state.js';
 import { toast } from './utils.js';
 import { renderAll } from './render.js';
+import { pushState } from './history.js';
 
 // ── État local au panneau ─────────────────────────────────────────────────────
 
@@ -292,6 +293,7 @@ export function initGroupingPanel() {
         return;
       }
 
+      pushState();
       setCurrentLayout(newLayout);
       setActiveProgIdx(0);
       setUnplacedItems([]);

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Plans sauvegardés — PlaquePCR</title>
+  <link rel="stylesheet" href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css">
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-800">
+
+  <header class="border-b bg-white">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('index') }}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+          &larr; Retour
+        </a>
+        <span class="text-gray-300">|</span>
+        <h1 class="text-lg font-semibold">Plans sauvegardés</h1>
+      </div>
+      <span class="text-sm text-gray-400">v2.0</span>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 py-10">
+
+    {% if not years %}
+      <div class="text-center py-20 text-gray-400">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <p class="text-base">Aucun plan sauvegardé pour l'instant.</p>
+        <p class="text-sm mt-1">Générez un plan depuis l'accueil, puis cliquez sur <strong>Sauvegarder</strong>.</p>
+      </div>
+    {% else %}
+      <div class="space-y-10">
+        {% for year in years %}
+          <section>
+            <h2 class="text-xl font-bold text-gray-700 mb-4 pb-2 border-b border-gray-200">{{ year }}</h2>
+            <div class="space-y-2">
+              {% for plan in by_year[year] %}
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center justify-between gap-4"
+                     data-plan-id="{{ plan.id }}">
+
+                  <!-- Infos -->
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-gray-800 truncate" title="{{ plan.name }}">
+                      {{ plan.name }}
+                    </p>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                      Template : <span class="text-gray-500">{{ plan.template_key }}</span>
+                      {% if plan.original_filename %}
+                        &mdash; Fichier : <span class="text-gray-500">{{ plan.original_filename }}</span>
+                      {% endif %}
+                    </p>
+                  </div>
+
+                  <!-- Date -->
+                  <div class="text-right shrink-0">
+                    <p class="text-xs text-gray-500">
+                      Modifié le {{ plan.updated_at[:10] | replace('-', '/') }}
+                    </p>
+                    <p class="text-xs text-gray-400">
+                      Créé le {{ plan.created_at[:10] | replace('-', '/') }}
+                    </p>
+                  </div>
+
+                  <!-- Actions -->
+                  <div class="flex items-center gap-2 shrink-0">
+                    <a href="{{ url_for('open_plan', plan_id=plan.id) }}"
+                       class="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg px-3 py-1.5 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Ouvrir
+                    </a>
+                    <button class="btn-delete inline-flex items-center gap-1.5 bg-white hover:bg-red-50 text-red-500 border border-red-200 text-xs font-medium rounded-lg px-3 py-1.5 transition-colors"
+                            data-plan-id="{{ plan.id }}" data-plan-name="{{ plan.name }}">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Supprimer
+                    </button>
+                  </div>
+
+                </div>
+              {% endfor %}
+            </div>
+          </section>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+  </main>
+
+  <!-- Toast -->
+  <div id="toast"
+       class="fixed bottom-6 right-6 hidden bg-gray-900 text-white text-sm px-4 py-3 rounded-xl shadow-xl z-50 transition-all">
+  </div>
+
+  <!-- Modale de confirmation de suppression -->
+  <div id="delete-modal"
+       class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-2">Supprimer ce plan ?</h2>
+      <p class="text-sm text-gray-500 mb-5">
+        Le plan <strong id="delete-plan-name"></strong> sera définitivement supprimé. Cette action est irréversible.
+      </p>
+      <div class="flex justify-end gap-3">
+        <button id="delete-cancel"
+                class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Annuler
+        </button>
+        <button id="delete-confirm"
+                class="px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+          Supprimer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Toast ───────────────────────────────────────────────────────────────
+    function toast(msg, duration = 3000) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.add('hidden'), duration);
+    }
+
+    // ── Suppression ─────────────────────────────────────────────────────────
+    const deleteModal   = document.getElementById('delete-modal');
+    const deleteName    = document.getElementById('delete-plan-name');
+    const deleteCancel  = document.getElementById('delete-cancel');
+    const deleteConfirm = document.getElementById('delete-confirm');
+    let pendingDeleteId = null;
+    let pendingDeleteRow = null;
+
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pendingDeleteId  = btn.dataset.planId;
+        pendingDeleteRow = btn.closest('[data-plan-id]');
+        deleteName.textContent = btn.dataset.planName;
+        deleteModal.classList.remove('hidden');
+      });
+    });
+
+    deleteCancel.addEventListener('click', () => {
+      deleteModal.classList.add('hidden');
+      pendingDeleteId = null;
+      pendingDeleteRow = null;
+    });
+
+    deleteModal.addEventListener('click', e => {
+      if (e.target === deleteModal) {
+        deleteModal.classList.add('hidden');
+        pendingDeleteId = null;
+        pendingDeleteRow = null;
+      }
+    });
+
+    deleteConfirm.addEventListener('click', async () => {
+      if (!pendingDeleteId) return;
+      deleteConfirm.disabled = true;
+      deleteConfirm.textContent = 'Suppression…';
+      try {
+        const resp = await fetch(`/sessions/${pendingDeleteId}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error(`Erreur HTTP ${resp.status}`);
+        pendingDeleteRow?.remove();
+        deleteModal.classList.add('hidden');
+        toast('Plan supprimé.');
+
+        // Si la section est vide, retirer le titre d'année
+        const section = pendingDeleteRow?.closest('section');
+        if (section && section.querySelectorAll('[data-plan-id]').length === 0) {
+          section.remove();
+        }
+        // Si plus aucun plan, afficher le message vide
+        if (document.querySelectorAll('[data-plan-id]').length === 0) {
+          location.reload();
+        }
+      } catch (err) {
+        toast('Erreur : ' + err.message);
+      } finally {
+        deleteConfirm.disabled = false;
+        deleteConfirm.textContent = 'Supprimer';
+        pendingDeleteId = null;
+        pendingDeleteRow = null;
+      }
+    });
+  </script>
+
+</body>
+</html>
